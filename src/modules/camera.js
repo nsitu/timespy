@@ -11,7 +11,7 @@ export class CameraManager {
         this.reader = null;
         this.videoWidth = 640;
         this.videoHeight = 480;
-        this.currentFacingMode = 'user';
+        this.currentFacingMode = 'environment'; // Default to environment camera
         this.isStreaming = false;
         this.hasMultipleCameras = false;
 
