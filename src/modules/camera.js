@@ -1,9 +1,8 @@
 import { debugElement, cameraToggle } from './domElements.js';
 
-// TODO: The optimal video camera resolution
-// will in this case depend on the viewport dimensions and orientation.
-// for example, if the viewport width is 1080 and height is 1920
-// then we should try to a 1920x1080 resolution with a vertical orientation
+// Camera resolution is now dynamically calculated based on viewport dimensions and orientation.
+// For portrait mobile devices, the camera resolution is optimized to match the aspect ratio
+// while considering performance constraints (max 1920x1080).
 
 export class CameraManager {
     constructor() {
@@ -15,6 +14,39 @@ export class CameraManager {
         this.currentFacingMode = 'user';
         this.isStreaming = false;
         this.hasMultipleCameras = false;
+
+        // Calculate optimal resolution based on viewport
+        this.calculateOptimalResolution();
+    }
+
+    /**
+     * Calculate optimal camera resolution based on viewport dimensions and orientation
+     */
+    calculateOptimalResolution() {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const isPortrait = viewportHeight > viewportWidth;
+
+        console.log(`Viewport: ${viewportWidth}x${viewportHeight}, Portrait: ${isPortrait}`);
+
+        // For mobile devices in portrait mode, we want the camera to capture
+        // in landscape orientation but rotated to match the viewport aspect ratio
+        if (isPortrait) {
+            // Request landscape resolution that matches portrait aspect ratio
+            // Camera width should match viewport height, camera height should match viewport width
+            this.videoWidth = Math.min(viewportHeight, 1920); // Cap at 1920 for performance
+            this.videoHeight = Math.min(viewportWidth, 1080);  // Cap at 1080 for performance
+        } else {
+            // Landscape orientation - match directly
+            this.videoWidth = Math.min(viewportWidth, 1920);
+            this.videoHeight = Math.min(viewportHeight, 1080);
+        }
+
+        // Ensure minimum resolution
+        this.videoWidth = Math.max(this.videoWidth, 640);
+        this.videoHeight = Math.max(this.videoHeight, 480);
+
+        console.log(`Optimal camera resolution: ${this.videoWidth}x${this.videoHeight}`);
     }
 
     updateDebug(message) {
@@ -26,18 +58,26 @@ export class CameraManager {
 
     async initialize() {
         try {
+            // Recalculate optimal resolution in case viewport changed
+            this.calculateOptimalResolution();
+
             // Check for multiple cameras and setup toggle
             await this.setupCameraToggle();
 
-            this.updateDebug('Requesting camera access...');
+            this.updateDebug(`Requesting camera access (${this.videoWidth}x${this.videoHeight})...`);
+
+            // Create video constraints with optimal resolution and additional settings
+            const videoConstraints = {
+                width: { ideal: this.videoWidth, min: 640 },
+                height: { ideal: this.videoHeight, min: 480 },
+                facingMode: this.currentFacingMode,
+                frameRate: { ideal: 30, max: 60 },
+                aspectRatio: { ideal: this.videoWidth / this.videoHeight }
+            };
 
             // Get user media stream
             this.stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: this.videoWidth },
-                    height: { ideal: this.videoHeight },
-                    facingMode: this.currentFacingMode
-                }
+                video: videoConstraints
             });
 
             this.updateDebug('Camera access granted, setting up stream processor...');
@@ -57,8 +97,7 @@ export class CameraManager {
             this.videoWidth = firstFrame.displayWidth;
             this.videoHeight = firstFrame.displayHeight;
 
-
-            this.updateDebug('Camera stream ready');
+            this.updateDebug(`Camera stream ready (${this.videoWidth}x${this.videoHeight})`);
 
             // Close the first frame
             firstFrame.close();
@@ -115,13 +154,21 @@ export class CameraManager {
                 this.reader = null;
             }
 
+            // Recalculate optimal resolution in case viewport changed
+            this.calculateOptimalResolution();
+
+            // Create video constraints with optimal resolution
+            const videoConstraints = {
+                width: { ideal: this.videoWidth, min: 640 },
+                height: { ideal: this.videoHeight, min: 480 },
+                facingMode: this.currentFacingMode,
+                frameRate: { ideal: 30, max: 60 },
+                aspectRatio: { ideal: this.videoWidth / this.videoHeight }
+            };
+
             // Get new stream with different facing mode
             this.stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: this.videoWidth },
-                    height: { ideal: this.videoHeight },
-                    facingMode: this.currentFacingMode
-                }
+                video: videoConstraints
             });
 
             // Set up new stream processor
@@ -129,8 +176,13 @@ export class CameraManager {
             const processor = new MediaStreamTrackProcessor({ track });
             this.reader = processor.readable.getReader();
 
+            // Update actual dimensions from the new stream
+            const { value: firstFrame } = await this.reader.read();
+            this.videoWidth = firstFrame.displayWidth;
+            this.videoHeight = firstFrame.displayHeight;
+            firstFrame.close();
 
-            this.updateDebug(`Switched to ${this.currentFacingMode} camera`);
+            this.updateDebug(`Switched to ${this.currentFacingMode} camera (${this.videoWidth}x${this.videoHeight})`);
 
             // Return camera info for other components to use
             return {
@@ -204,6 +256,40 @@ export class CameraManager {
 
     hasMultipleCamerasAvailable() {
         return this.hasMultipleCameras;
+    }
+
+    /**
+     * Get current viewport information
+     * @returns {object} Viewport dimensions and orientation
+     */
+    getViewportInfo() {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const isPortrait = viewportHeight > viewportWidth;
+
+        return {
+            width: viewportWidth,
+            height: viewportHeight,
+            isPortrait,
+            aspectRatio: viewportWidth / viewportHeight
+        };
+    }
+
+    /**
+     * Handle viewport resize - recalculate optimal resolution
+     * Call this method when the viewport changes (e.g., device rotation)
+     */
+    onViewportResize() {
+        const oldWidth = this.videoWidth;
+        const oldHeight = this.videoHeight;
+
+        this.calculateOptimalResolution();
+
+        // Log if resolution changed significantly
+        if (Math.abs(this.videoWidth - oldWidth) > 100 || Math.abs(this.videoHeight - oldHeight) > 100) {
+            console.log(`Viewport changed, new optimal resolution: ${this.videoWidth}x${this.videoHeight}`);
+            // Note: You may want to restart the camera stream here for optimal quality
+        }
     }
 
 }

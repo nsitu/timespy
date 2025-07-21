@@ -1,0 +1,237 @@
+export class CanvasManager {
+    constructor() {
+        this.canvases = [];
+        this.contexts = [];
+        this.canvasCount = 30;
+        this.width = 0;
+        this.height = 0;
+        this.isInitialized = false;
+    }
+
+    /**
+     * Initialize the canvas manager with viewport dimensions
+     * @param {number} width - Width of the viewport/video
+     * @param {number} height - Height of the viewport/video
+     */
+    initialize(width, height) {
+        this.width = width;
+        this.height = height;
+
+        // Clear existing canvases if reinitializing
+        this.cleanup();
+
+        // Create 30 offscreen canvases
+        for (let i = 0; i < this.canvasCount; i++) {
+            const canvas = new OffscreenCanvas(width, height);
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+            // Initialize canvas with transparent background
+            ctx.clearRect(0, 0, width, height);
+
+            this.canvases.push(canvas);
+            this.contexts.push(ctx);
+        }
+
+        this.isInitialized = true;
+        console.log(`CanvasManager initialized with ${this.canvasCount} canvases (${width}x${height})`);
+    }
+
+    /**
+     * Get a specific canvas by index
+     * @param {number} index - Canvas index (0-59)
+     * @returns {OffscreenCanvas|null} The canvas at the specified index
+     */
+    getCanvas(index) {
+        if (!this.isInitialized || index < 0 || index >= this.canvasCount) {
+            console.warn(`Invalid canvas index: ${index}`);
+            return null;
+        }
+        return this.canvases[index];
+    }
+
+    /**
+     * Get a specific canvas context by index
+     * @param {number} index - Canvas index (0-59)
+     * @returns {OffscreenCanvasRenderingContext2D|null} The context at the specified index
+     */
+    getContext(index) {
+        if (!this.isInitialized || index < 0 || index >= this.canvasCount) {
+            console.warn(`Invalid canvas index: ${index}`);
+            return null;
+        }
+        return this.contexts[index];
+    }
+
+    /**
+     * Write pixel data from a source to a specific row on a target canvas
+     * @param {number} canvasIndex - Index of the target canvas (0-59)
+     * @param {ImageData} sourceImageData - Source image data containing the pixels
+     * @param {number} sourceRow - Row index in the source image to copy from
+     * @param {number} targetRow - Row index in the target canvas to write to
+     * @param {number} startX - Starting X position (default: 0)
+     * @param {number} width - Width of the row to copy (default: canvas width)
+     */
+    writePixelRow(canvasIndex, sourceImageData, sourceRow, targetRow, startX = 0, width = null) {
+        const ctx = this.getContext(canvasIndex);
+        if (!ctx) return false;
+
+        const copyWidth = width || this.width;
+
+        // Validate parameters
+        if (sourceRow < 0 || sourceRow >= sourceImageData.height ||
+            targetRow < 0 || targetRow >= this.height ||
+            startX < 0 || startX + copyWidth > this.width) {
+            console.warn('Invalid parameters for writePixelRow');
+            return false;
+        }
+
+        try {
+            // Create ImageData for the target row
+            const rowImageData = new ImageData(copyWidth, 1);
+
+            // Copy pixel data from source row to target row
+            const sourceRowStart = sourceRow * sourceImageData.width * 4;
+            const sourcePixelStart = sourceRowStart + (startX * 4);
+
+            for (let i = 0; i < copyWidth * 4; i++) {
+                rowImageData.data[i] = sourceImageData.data[sourcePixelStart + i];
+            }
+
+            // Write the row to the target canvas
+            ctx.putImageData(rowImageData, startX, targetRow);
+            return true;
+
+        } catch (error) {
+            console.error('Error writing pixel row:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Write a specific row from a frame directly to a target canvas (more efficient)
+     * @param {number} canvasIndex - Index of the target canvas (0-59)
+     * @param {VideoFrame} frame - Source video frame
+     * @param {number} sourceRow - Row index in the source frame to copy from
+     * @param {number} targetRow - Row index in the target canvas to write to
+     * @param {number} startX - Starting X position (default: 0)
+     * @param {number} width - Width of the row to copy (default: canvas width)
+     */
+    writeFrameRow(canvasIndex, frame, sourceRow, targetRow, startX = 0, width = null) {
+        const ctx = this.getContext(canvasIndex);
+        if (!ctx) return false;
+
+        const copyWidth = width || this.width;
+
+        // Validate parameters
+        if (sourceRow < 0 || sourceRow >= frame.displayHeight ||
+            targetRow < 0 || targetRow >= this.height ||
+            startX < 0 || startX + copyWidth > this.width) {
+            console.warn('Invalid parameters for writeFrameRow');
+            return false;
+        }
+
+        try {
+            // Use drawImage with clipping to copy just the specific row
+            // This is much more efficient than getting full ImageData
+            ctx.drawImage(
+                frame,
+                startX, sourceRow,           // Source x, y
+                copyWidth, 1,                // Source width, height (1 pixel tall)
+                startX, targetRow,           // Destination x, y  
+                copyWidth, 1                 // Destination width, height
+            );
+            return true;
+
+        } catch (error) {
+            console.error('Error writing frame row:', error);
+            return false;
+        }
+    }    /**
+     * Clear a specific canvas
+     * @param {number} index - Canvas index to clear
+     */
+    clearCanvas(index) {
+        const ctx = this.getContext(index);
+        if (ctx) {
+            ctx.clearRect(0, 0, this.width, this.height);
+        }
+    }
+
+    /**
+     * Clear all canvases
+     */
+    clearAllCanvases() {
+        for (let i = 0; i < this.canvasCount; i++) {
+            this.clearCanvas(i);
+        }
+    }
+
+    /**
+     * Get canvas dimensions
+     * @returns {{width: number, height: number, count: number}}
+     */
+    getDimensions() {
+        return {
+            width: this.width,
+            height: this.height,
+            count: this.canvasCount
+        };
+    }
+
+    /**
+     * Convert a canvas to a blob for downloading
+     * @param {number} index - Canvas index
+     * @param {string} type - Image type (default: 'image/png')
+     * @returns {Promise<Blob|null>} The canvas as a blob
+     */
+    async getCanvasBlob(index, type = 'image/png') {
+        const canvas = this.getCanvas(index);
+        if (!canvas) return null;
+
+        try {
+            return await canvas.convertToBlob({ type });
+        } catch (error) {
+            console.error('Error converting canvas to blob:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get all canvases as an array of blobs
+     * @param {string} type - Image type (default: 'image/png')
+     * @returns {Promise<Blob[]>} Array of canvas blobs
+     */
+    async getAllCanvasBlobs(type = 'image/png') {
+        const blobs = [];
+        for (let i = 0; i < this.canvasCount; i++) {
+            const blob = await this.getCanvasBlob(i, type);
+            if (blob) {
+                blobs.push(blob);
+            }
+        }
+        return blobs;
+    }
+
+    /**
+     * Cleanup resources
+     */
+    cleanup() {
+        this.canvases = [];
+        this.contexts = [];
+        this.isInitialized = false;
+        console.log('CanvasManager cleaned up');
+    }
+
+    /**
+     * Get the current status of the canvas manager
+     * @returns {object} Status information
+     */
+    getStatus() {
+        return {
+            initialized: this.isInitialized,
+            canvasCount: this.canvasCount,
+            dimensions: { width: this.width, height: this.height },
+            canvasesCreated: this.canvases.length
+        };
+    }
+}

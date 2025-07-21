@@ -9,5 +9,6 @@ export const app = document.getElementById('app');
 export const debugElement = document.getElementById('debug');
 export const cameraToggle = document.getElementById('cameraToggle');
 export const downloadFile = document.getElementById('downloadFile');
+export const previewCanvas = document.getElementById('previewCanvas');
 
 export const loadingSpinner = document.getElementById('loading-spinner');

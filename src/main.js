@@ -146,7 +146,17 @@ window.addEventListener('beforeunload', () => {
     if (cameraManager) {
         cameraManager.stop();
     }
-    if (poseProcessor) {
-        poseProcessor.cleanup();
+    if (frameProcessor) {
+        frameProcessor.cleanup();
+    }
+});
+
+// Handle viewport resize events (e.g., device rotation)
+window.addEventListener('resize', () => {
+    if (cameraManager) {
+        cameraManager.onViewportResize();
+    }
+    if (frameProcessor && frameProcessor.getAnimationRenderer()) {
+        frameProcessor.getAnimationRenderer().onResize();
     }
 });
