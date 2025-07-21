@@ -30,8 +30,21 @@ export class DownloadManager {
     createRenderCanvas() {
         if (!this.renderCanvas) {
             this.renderCanvas = document.createElement('canvas');
-            this.renderCanvas.width = this.canvasManager.width;
-            this.renderCanvas.height = this.canvasManager.height;
+
+            // Ensure dimensions are even for MP4 compatibility
+            // MP4 encoding requires both width and height to be even numbers
+            const width = this.canvasManager.width % 2 === 0 ?
+                this.canvasManager.width :
+                this.canvasManager.width - 1;
+            const height = this.canvasManager.height % 2 === 0 ?
+                this.canvasManager.height :
+                this.canvasManager.height - 1;
+
+            this.renderCanvas.width = width;
+            this.renderCanvas.height = height;
+
+            console.log(`Render canvas dimensions: ${width}x${height} (original: ${this.canvasManager.width}x${this.canvasManager.height})`);
+
             this.renderContext = this.renderCanvas.getContext('2d', {
                 willReadFrequently: false,
                 alpha: false,
