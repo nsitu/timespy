@@ -12,33 +12,8 @@ export class AnimationRenderer {
         this.frameRate = 30; // 30 FPS for smooth animation
         this.frameInterval = 1000 / this.frameRate; // ~33.33ms between frames
 
-        this.initializePreviewCanvas();
     }
 
-    /**
-     * Initialize the preview canvas dimensions and context
-     */
-    initializePreviewCanvas() {
-        if (!this.previewCanvas) {
-            console.error('Preview canvas not found');
-            return;
-        }
-
-        // Get the canvas manager dimensions
-        const dimensions = this.canvasManager.getDimensions();
-
-        // Set canvas resolution to match the offscreen canvases
-        this.previewCanvas.width = dimensions.width;
-        this.previewCanvas.height = dimensions.height;
-
-        // Get 2D context
-        this.previewCtx = this.previewCanvas.getContext('2d');
-
-        // Clear the canvas initially
-        this.clearPreviewCanvas();
-
-        console.log(`Preview canvas initialized: ${dimensions.width}x${dimensions.height}`);
-    }
 
     /**
      * Start the animation rendering loop
@@ -84,33 +59,22 @@ export class AnimationRenderer {
     }
 
     /**
-     * Render the current frame from the offscreen canvas to the preview canvas
+     * Render the current frame by showing the appropriate DOM canvas
      */
     renderCurrentFrame() {
-        if (!this.previewCtx || !this.canvasManager.isInitialized) {
+        if (!this.canvasManager.isInitialized) {
             return;
         }
 
         try {
-            // Get the current offscreen canvas
-            const offscreenCanvas = this.canvasManager.getCanvas(this.currentFrameIndex);
 
-            if (offscreenCanvas) {
-                // Clear the preview canvas
-                this.clearPreviewCanvas();
-
-                // Draw the offscreen canvas content to the preview canvas
-                this.previewCtx.drawImage(
-                    offscreenCanvas,
-                    0, 0,
-                    this.previewCanvas.width,
-                    this.previewCanvas.height
-                );
-            }
+            console.log(`Rendering frame ${this.currentFrameIndex} (direction: ${this.direction})`);
+            // Simply show the current canvas and hide others
+            this.canvasManager.showCanvas(this.currentFrameIndex);
 
             // Move to next frame with ping-pong behavior (0→29→28→...→1→0→1→...)
             this.currentFrameIndex += this.direction;
-            
+
             // Check boundaries and reverse direction if needed
             if (this.currentFrameIndex >= 29) {
                 this.currentFrameIndex = 29;
@@ -143,17 +107,9 @@ export class AnimationRenderer {
             console.warn(`Invalid frame index: ${frameIndex}`);
             return;
         }
-
-        const offscreenCanvas = this.canvasManager.getCanvas(frameIndex);
-        if (offscreenCanvas && this.previewCtx) {
-            this.clearPreviewCanvas();
-            this.previewCtx.drawImage(
-                offscreenCanvas,
-                0, 0,
-                this.previewCanvas.width,
-                this.previewCanvas.height
-            );
-        }
+        console.log(`Rendering frame ${frameIndex}`);
+        // Simply show the specified canvas
+        this.canvasManager.showCanvas(frameIndex);
     }
 
     /**
@@ -188,7 +144,6 @@ export class AnimationRenderer {
             currentFrame: this.currentFrameIndex,
             direction: this.direction > 0 ? 'forward' : 'backward',
             frameRate: this.frameRate,
-            canvasInitialized: this.previewCtx !== null,
             canvasManagerReady: this.canvasManager.isInitialized
         };
     }
@@ -209,7 +164,12 @@ export class AnimationRenderer {
         this.stopRendering();
         this.currentFrameIndex = 0;
         this.direction = 1;
-        this.previewCtx = null;
+
+        // Hide all canvases when cleaning up
+        if (this.canvasManager && this.canvasManager.isInitialized) {
+            this.canvasManager.hideAllCanvases();
+        }
+
         console.log('Animation renderer cleaned up');
     }
 }

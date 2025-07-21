@@ -61,6 +61,9 @@ startAppBtn.addEventListener('click', async () => {
         // Initialize frame processor with camera dimensions
         frameProcessor.setDimensions(cameraInfo.width, cameraInfo.height);
 
+        // Give frame processor access to camera manager for shutdown
+        frameProcessor.setCameraManager(cameraManager);
+
         // Initialize download manager
         downloadManager = new DownloadManager(cameraManager);
 

@@ -6,6 +6,7 @@ export class CanvasManager {
         this.width = 0;
         this.height = 0;
         this.isInitialized = false;
+        this.currentlyVisibleIndex = -1; // Track which canvas is currently visible
     }
 
     /**
@@ -20,23 +21,45 @@ export class CanvasManager {
         // Clear existing canvases if reinitializing
         this.cleanup();
 
-        // Create 30 offscreen canvases
+        // Create 30 regular DOM canvases
         for (let i = 0; i < this.canvasCount; i++) {
-            const canvas = new OffscreenCanvas(width, height);
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.id = `timespy-canvas-${i}`;
+
+            // Set CSS for full viewport coverage and initially hidden
+            canvas.style.position = 'absolute';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
+            canvas.style.objectFit = 'cover';
+            canvas.style.display = 'none'; // Initially hidden
+            canvas.style.zIndex = '1'; // Below UI elements
+
+            const ctx = canvas.getContext('2d', {
+                willReadFrequently: false,  // We're mostly writing
+                alpha: false,               // No transparency needed
+                desynchronized: true        // Allow async rendering
+            });
 
             // Initialize canvas with transparent background
             ctx.clearRect(0, 0, width, height);
+
+            // Append to the app container
+            const appElement = document.getElementById('app');
+            if (appElement) {
+                appElement.appendChild(canvas);
+            }
 
             this.canvases.push(canvas);
             this.contexts.push(ctx);
         }
 
         this.isInitialized = true;
-        console.log(`CanvasManager initialized with ${this.canvasCount} canvases (${width}x${height})`);
-    }
-
-    /**
+        console.log(`CanvasManager initialized with ${this.canvasCount} DOM canvases (${width}x${height})`);
+    }    /**
      * Get a specific canvas by index
      * @param {number} index - Canvas index (0-59)
      * @returns {OffscreenCanvas|null} The canvas at the specified index
@@ -213,11 +236,58 @@ export class CanvasManager {
     }
 
     /**
+     * Show a specific canvas and hide all others
+     * @param {number} index - Canvas index to show (0-29)
+     */
+    showCanvas(index) {
+        if (!this.isInitialized || index < 0 || index >= this.canvasCount) {
+            console.warn(`Invalid canvas index: ${index}`);
+            return false;
+        }
+
+        // If this canvas is already visible, no need to do anything
+        if (this.currentlyVisibleIndex === index) {
+            return true;
+        }
+
+        // Hide the previously visible canvas (if any)
+        if (this.currentlyVisibleIndex >= 0 && this.currentlyVisibleIndex < this.canvasCount) {
+            this.canvases[this.currentlyVisibleIndex].style.display = 'none';
+        }
+
+        // Show the new canvas
+        this.canvases[index].style.display = 'block';
+
+        // Update tracking
+        this.currentlyVisibleIndex = index;
+        return true;
+    }
+
+    /**
+     * Hide all canvases
+     */
+    hideAllCanvases() {
+        // Only hide the currently visible canvas (if any)
+        if (this.currentlyVisibleIndex >= 0 && this.currentlyVisibleIndex < this.canvasCount) {
+            this.canvases[this.currentlyVisibleIndex].style.display = 'none';
+            this.currentlyVisibleIndex = -1;
+        }
+    }
+
+    /**
      * Cleanup resources
      */
     cleanup() {
+        // Remove DOM canvases from the page
+        this.canvases.forEach(canvas => {
+            if (canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+        });
+
         this.canvases = [];
         this.contexts = [];
+        this.currentlyVisibleIndex = -1;
         this.isInitialized = false;
         console.log('CanvasManager cleaned up');
     }
@@ -231,7 +301,8 @@ export class CanvasManager {
             initialized: this.isInitialized,
             canvasCount: this.canvasCount,
             dimensions: { width: this.width, height: this.height },
-            canvasesCreated: this.canvases.length
+            canvasesCreated: this.canvases.length,
+            currentlyVisible: this.currentlyVisibleIndex
         };
     }
 }

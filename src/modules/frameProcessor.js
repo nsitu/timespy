@@ -9,6 +9,8 @@ export class FrameProcessor {
         this.lastVideoTime = -1;
         this.isProcessing = false;
         this.currentTargetRow = 0; // Track which row we're currently filling across all canvases
+        this.isComplete = false; // Track if we've filled all canvases completely
+        this.cameraManager = null; // Reference to camera manager for shutdown
 
         // Create OffscreenCanvas for frame processing
         this.offscreenCanvas = new OffscreenCanvas(640, 480);
@@ -42,10 +44,24 @@ export class FrameProcessor {
         this.animationRenderer.startRendering();
     }
 
+    /**
+     * Set camera manager reference for shutdown capability
+     * @param {CameraManager} cameraManager - The camera manager instance
+     */
+    setCameraManager(cameraManager) {
+        this.cameraManager = cameraManager;
+    }
+
 
 
     async processFrame(frame) {
         try {
+            // Skip processing if we've already completed filling all canvases
+            if (this.isComplete) {
+                frame.close();
+                return;
+            }
+
             // Prevent overlapping processing
             if (this.isProcessing) {
                 frame.close();
@@ -67,27 +83,41 @@ export class FrameProcessor {
             // Each canvas gets a different source row, but all write to the same target row
             if (this.canvasManager.isInitialized) {
                 const frameHeight = frame.displayHeight;
-                
+
                 // Write one row to each of the 30 canvases
                 for (let canvasIndex = 0; canvasIndex < 30; canvasIndex++) {
                     // Calculate which source row to use for this canvas
                     // Distribute the frame height across 30 canvases
                     const sourceRow = Math.floor((canvasIndex / 30) * frameHeight);
-                    
+
                     // All canvases write to the same target row (current row being filled)
                     const targetRow = this.currentTargetRow;
-                    
+
                     // Write this row to the canvas
                     this.canvasManager.writeFrameRow(canvasIndex, frame, sourceRow, targetRow);
                 }
-                
+
                 // Move to the next target row for the next frame
                 this.currentTargetRow++;
-                
-                // Reset to top when we've filled all rows
+
+                // Check if we've completed filling all rows
                 if (this.currentTargetRow >= frameHeight) {
                     this.currentTargetRow = 0;
-                    console.log(`Completed full cycle of ${frameHeight} rows, resetting to top`);
+                    this.isComplete = true;
+
+                    console.log(`✅ Time-slicing complete! Filled all ${frameHeight} rows across 30 canvases.`);
+                    this.updateDebug(`Time-slicing complete! Camera shutting down...`);
+
+                    // Shutdown camera since we're done processing
+                    if (this.cameraManager) {
+                        console.log('🛑 Stopping camera - time-slicing complete');
+                        this.cameraManager.stop();
+                    }
+
+                    // Update debug to show animation-only mode
+                    setTimeout(() => {
+                        this.updateDebug(`Animation mode - ${frameHeight} frames captured. Enjoy the time-spy effect!`);
+                    }, 1000);
                 }
             }
 
@@ -108,7 +138,9 @@ export class FrameProcessor {
         // Clear any ongoing processing 
         this.frameProcessingCount = 0;
         this.currentTargetRow = 0;
+        this.isComplete = false;
         this.isProcessing = false;
+        this.cameraManager = null;
 
         // Cleanup animation renderer
         if (this.animationRenderer) {
@@ -136,5 +168,28 @@ export class FrameProcessor {
      */
     getAnimationRenderer() {
         return this.animationRenderer;
+    }
+
+    /**
+     * Check if time-slicing is complete
+     * @returns {boolean} True if all canvases are filled
+     */
+    isTimeSlicingComplete() {
+        return this.isComplete;
+    }
+
+    /**
+     * Get processing progress information
+     * @returns {object} Progress information
+     */
+    getProgress() {
+        const frameHeight = this.canvasManager.isInitialized ? this.canvasManager.height : 0;
+        return {
+            currentRow: this.currentTargetRow,
+            totalRows: frameHeight,
+            framesProcessed: this.frameProcessingCount,
+            progressPercent: frameHeight > 0 ? Math.round((this.currentTargetRow / frameHeight) * 100) : 0,
+            isComplete: this.isComplete
+        };
     }
 }
