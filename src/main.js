@@ -64,8 +64,8 @@ startAppBtn.addEventListener('click', async () => {
         // Give frame processor access to camera manager for shutdown
         frameProcessor.setCameraManager(cameraManager);
 
-        // Initialize download manager
-        downloadManager = new DownloadManager(cameraManager);
+        // Initialize download manager with canvas manager from frame processor
+        downloadManager = new DownloadManager(frameProcessor.canvasManager);
 
         // Set up camera toggle if multiple cameras available
         if (cameraManager.hasMultipleCamerasAvailable()) {

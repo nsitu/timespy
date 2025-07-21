@@ -27,7 +27,7 @@ export class CameraManager {
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         const isPortrait = viewportHeight > viewportWidth;
-        
+
         // Portrait = mobile device = prefer environment (rear) camera
         // Landscape = desktop/laptop = prefer user (front) camera
         return isPortrait ? 'environment' : 'user';
@@ -61,7 +61,7 @@ export class CameraManager {
         this.videoHeight = Math.max(this.videoHeight, 480);
 
         console.log(`Optimal camera resolution: ${this.videoWidth}x${this.videoHeight}`);
-        
+
         // Update facing mode preference based on current viewport
         this.currentFacingMode = this.getPreferredFacingMode();
         console.log(`Preferred facing mode: ${this.currentFacingMode} (viewport: ${window.innerWidth}x${window.innerHeight})`);
@@ -95,7 +95,7 @@ export class CameraManager {
             // Get user media stream
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: videoConstraints
-            });            this.updateDebug('Camera access granted, setting up stream processor...');            // Check if MediaStreamTrackProcessor is supported
+            }); this.updateDebug('Camera access granted, setting up stream processor...');            // Check if MediaStreamTrackProcessor is supported
             if (!window.MediaStreamTrackProcessor) {
                 throw new Error('MediaStreamTrackProcessor not supported in this browser');
             }
