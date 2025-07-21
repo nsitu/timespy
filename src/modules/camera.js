@@ -11,12 +11,26 @@ export class CameraManager {
         this.reader = null;
         this.videoWidth = 640;
         this.videoHeight = 480;
-        this.currentFacingMode = 'environment'; // Default to environment camera
+        this.currentFacingMode = this.getPreferredFacingMode(); // Smart default based on viewport
         this.isStreaming = false;
         this.hasMultipleCameras = false;
 
         // Calculate optimal resolution based on viewport
         this.calculateOptimalResolution();
+    }
+
+    /**
+     * Determine preferred camera based on viewport orientation
+     * @returns {string} Preferred facing mode
+     */
+    getPreferredFacingMode() {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const isPortrait = viewportHeight > viewportWidth;
+        
+        // Portrait = mobile device = prefer environment (rear) camera
+        // Landscape = desktop/laptop = prefer user (front) camera
+        return isPortrait ? 'environment' : 'user';
     }
 
     /**
@@ -47,6 +61,10 @@ export class CameraManager {
         this.videoHeight = Math.max(this.videoHeight, 480);
 
         console.log(`Optimal camera resolution: ${this.videoWidth}x${this.videoHeight}`);
+        
+        // Update facing mode preference based on current viewport
+        this.currentFacingMode = this.getPreferredFacingMode();
+        console.log(`Preferred facing mode: ${this.currentFacingMode} (viewport: ${window.innerWidth}x${window.innerHeight})`);
     }
 
     updateDebug(message) {
@@ -58,31 +76,26 @@ export class CameraManager {
 
     async initialize() {
         try {
-            // Recalculate optimal resolution in case viewport changed
+            // Recalculate optimal resolution and facing mode in case viewport changed
             this.calculateOptimalResolution();
 
             // Check for multiple cameras and setup toggle
             await this.setupCameraToggle();
 
-            this.updateDebug(`Requesting camera access (${this.videoWidth}x${this.videoHeight})...`);
+            this.updateDebug(`Requesting ${this.currentFacingMode} camera (${this.videoWidth}x${this.videoHeight})...`);
 
-            // Create video constraints with optimal resolution and additional settings
+            // Simple camera request with ideal facing mode
             const videoConstraints = {
                 width: { ideal: this.videoWidth, min: 640 },
                 height: { ideal: this.videoHeight, min: 480 },
-                facingMode: this.currentFacingMode,
-                frameRate: { ideal: 30, max: 60 },
-                aspectRatio: { ideal: this.videoWidth / this.videoHeight }
+                facingMode: { ideal: this.currentFacingMode },
+                frameRate: { ideal: 30, max: 60 }
             };
 
             // Get user media stream
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: videoConstraints
-            });
-
-            this.updateDebug('Camera access granted, setting up stream processor...');
-
-            // Check if MediaStreamTrackProcessor is supported
+            });            this.updateDebug('Camera access granted, setting up stream processor...');            // Check if MediaStreamTrackProcessor is supported
             if (!window.MediaStreamTrackProcessor) {
                 throw new Error('MediaStreamTrackProcessor not supported in this browser');
             }
@@ -119,14 +132,23 @@ export class CameraManager {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
-            this.hasMultipleCameras = true
-            //this.hasMultipleCameras = videoDevices.length > 1;
+            console.log('Available video devices:', videoDevices);
+
+            this.hasMultipleCameras = videoDevices.length > 1;
 
             // Show camera toggle button if multiple cameras are available
             if (this.hasMultipleCameras) {
                 cameraToggle.style.display = 'block';
             } else {
                 cameraToggle.style.display = 'none';
+            }
+
+            // Log camera availability for debugging
+            if (videoDevices.length === 0) {
+                console.warn('No video input devices found');
+            } else {
+                console.log(`Found ${videoDevices.length} video device(s):`,
+                    videoDevices.map(d => ({ label: d.label || 'Unknown', deviceId: d.deviceId })));
             }
 
             return this.hasMultipleCameras;
@@ -157,19 +179,52 @@ export class CameraManager {
             // Recalculate optimal resolution in case viewport changed
             this.calculateOptimalResolution();
 
-            // Create video constraints with optimal resolution
-            const videoConstraints = {
-                width: { ideal: this.videoWidth, min: 640 },
-                height: { ideal: this.videoHeight, min: 480 },
-                facingMode: this.currentFacingMode,
-                frameRate: { ideal: 30, max: 60 },
-                aspectRatio: { ideal: this.videoWidth / this.videoHeight }
-            };
+            // Try to get camera with new facing mode, with fallback
+            let stream = null;
+            let actualFacingMode = this.currentFacingMode;
 
-            // Get new stream with different facing mode
-            this.stream = await navigator.mediaDevices.getUserMedia({
-                video: videoConstraints
-            });
+            try {
+                // First attempt: Try with specific facing mode
+                const videoConstraints = {
+                    width: { ideal: this.videoWidth, min: 640 },
+                    height: { ideal: this.videoHeight, min: 480 },
+                    facingMode: { ideal: this.currentFacingMode }, // Use 'ideal' instead of exact
+                    frameRate: { ideal: 30, max: 60 },
+                    aspectRatio: { ideal: this.videoWidth / this.videoHeight }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: videoConstraints
+                });
+
+            } catch (firstError) {
+                console.log(`Failed to get ${this.currentFacingMode} camera during toggle, trying fallback...`);
+
+                try {
+                    // Second attempt: Remove facing mode constraint
+                    const fallbackConstraints = {
+                        width: { ideal: this.videoWidth, min: 640 },
+                        height: { ideal: this.videoHeight, min: 480 },
+                        frameRate: { ideal: 30, max: 60 },
+                        aspectRatio: { ideal: this.videoWidth / this.videoHeight }
+                    };
+
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: fallbackConstraints
+                    });
+
+                    // Determine which camera we actually got
+                    const track = stream.getVideoTracks()[0];
+                    const settings = track.getSettings();
+                    actualFacingMode = settings.facingMode || 'unknown';
+
+                } catch (secondError) {
+                    throw new Error(`Camera toggle failed: ${firstError.message}. Fallback also failed: ${secondError.message}`);
+                }
+            }
+
+            this.stream = stream;
+            this.currentFacingMode = actualFacingMode;
 
             // Set up new stream processor
             const track = this.stream.getVideoTracks()[0];

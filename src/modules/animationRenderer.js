@@ -68,7 +68,7 @@ export class AnimationRenderer {
 
         try {
 
-            console.log(`Rendering frame ${this.currentFrameIndex} (direction: ${this.direction})`);
+            // console.log(`Rendering frame ${this.currentFrameIndex} (direction: ${this.direction})`);
             // Simply show the current canvas and hide others
             this.canvasManager.showCanvas(this.currentFrameIndex);
 

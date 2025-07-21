@@ -86,9 +86,16 @@ export class FrameProcessor {
 
                 // Write one row to each of the 30 canvases
                 for (let canvasIndex = 0; canvasIndex < 30; canvasIndex++) {
-                    // Calculate which source row to use for this canvas
-                    // Distribute the frame height across 30 canvases
-                    const sourceRow = Math.floor((canvasIndex / 30) * frameHeight);
+                    // Calculate which source row to use for this canvas using cosine distribution
+                    // This creates a gentle sway back and forth with more samples near center
+
+                    // Normalize canvas index to 0-1 range, then multiply by PI (0 to PI range)
+                    const normalizedIndex = (canvasIndex / (30 - 1)) * Math.PI;
+
+                    // Use cosine function to create distribution: cos(0) = 1, cos(PI/2) = 0, cos(PI) = -1
+                    // Transform to 0-1 range: (cos(x) + 1) / 2
+                    // Then scale to frame height
+                    const sourceRow = Math.floor(((Math.cos(normalizedIndex) + 1) / 2) * (frameHeight - 1));
 
                     // All canvases write to the same target row (current row being filled)
                     const targetRow = this.currentTargetRow;
