@@ -154,6 +154,19 @@ export class CanvasManager {
         }
 
         try {
+            // Debug frame type on first write (especially important for polyfill)
+            if (canvasIndex === 0 && targetRow === 0) {
+                console.log(`🖼️ Frame info for writeFrameRow:`, {
+                    frameType: frame.constructor.name,
+                    frameDisplayWidth: frame.displayWidth,
+                    frameDisplayHeight: frame.displayHeight,
+                    sourceRow,
+                    targetRow,
+                    copyWidth,
+                    hasDrawImage: typeof ctx.drawImage === 'function'
+                });
+            }
+
             // Use drawImage with clipping to copy just the specific row
             // This is much more efficient than getting full ImageData
             ctx.drawImage(
@@ -166,7 +179,14 @@ export class CanvasManager {
             return true;
 
         } catch (error) {
-            console.error('Error writing frame row:', error);
+            console.error('Error writing frame row:', error, {
+                frameType: frame.constructor.name,
+                canvasIndex,
+                sourceRow,
+                targetRow,
+                frameDisplayWidth: frame.displayWidth,
+                frameDisplayHeight: frame.displayHeight
+            });
             return false;
         }
     }    /**
